@@ -11,7 +11,7 @@ const CSourceLanguage = Module.CSourceLanguage;
 
 const zcc = @import("compile_commands");
 
-const additional_flags: []const []const u8 = &.{"-std=c++20"};
+const additional_flags: []const []const u8 = &.{"-std=c++23"};
 const debug_flags = runtime_check_flags ++ warning_flags;
 
 pub fn build(b: *std.Build) void {
@@ -52,7 +52,7 @@ pub fn build(b: *std.Build) void {
     const exe_files = getCSrcFiles(
         b.allocator,
         .{
-            .dir_path = "src/cpp",
+            .dir_path = "src/",
             .flags = exe_flags,
             .language = .cpp,
         },
@@ -63,6 +63,9 @@ pub fn build(b: *std.Build) void {
     {
         exe.addCSourceFiles(exe_files);
         exe.addIncludePath(b.path("include"));
+        exe.linkSystemLibrary("glfw");
+        exe.linkSystemLibrary("GLEW");
+        exe.linkSystemLibrary("opengl");
     }
 
     // Setup debug executable
@@ -72,68 +75,6 @@ pub fn build(b: *std.Build) void {
         debug.addCSourceFiles(debug_files);
         debug.addIncludePath(b.path("include"));
     }
-
-    // Build and Link zig -> c code -------------------------------------------
-    const zig_lib = b.addLibrary(.{
-        .name = "mathtest",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/zig/mathtest.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
-        .linkage = .static,
-    });
-    zig_lib.linkLibC();
-    zig_lib.addIncludePath(b.path("include/"));
-    exe.root_module.linkLibrary(zig_lib);
-    debug.root_module.linkLibrary(zig_lib);
-    //-------------------------------------------------------------------------
-
-    // Build and/or Link Dynamic library --------------------------------------
-    const dynamic_option = b.option(bool, "build-dynamic", "builds the static.a file") orelse false;
-    if (dynamic_option) {
-        const dynamic_lib = createCLib(b, .{
-            .name = "example_dynamic",
-            .dir_path = "lib/example-dynamic-lib/",
-            .optimize = optimize,
-            .target = target,
-            .flags = additional_flags ++ debug_flags ++ warning_flags,
-            .language = .cpp,
-            .linkage = .dynamic,
-        });
-        exe.root_module.linkLibrary(dynamic_lib);
-        debug.root_module.linkLibrary(dynamic_lib);
-        b.installArtifact(dynamic_lib);
-    } else {
-        exe.root_module.addLibraryPath(b.path("lib/"));
-        exe.root_module.linkSystemLibrary("example_dynamic", .{});
-        debug.root_module.addLibraryPath(b.path("lib/"));
-        debug.root_module.linkSystemLibrary("example_dynamic", .{});
-    }
-    //-------------------------------------------------------------------------
-
-    // Build and/or Link Static library --------------------------------------
-    const static_option = b.option(bool, "build-static", "builds the static.a file") orelse false;
-    if (static_option) {
-        const static_lib = createCLib(b, .{
-            .name = "example_static",
-            .dir_path = "lib/example-static-lib/",
-            .optimize = optimize,
-            .target = target,
-            .language = .c,
-            .linkage = .static,
-        });
-        exe.linkLibrary(static_lib);
-        debug.linkLibrary(static_lib);
-        zig_lib.linkLibrary(static_lib);
-        b.installArtifact(static_lib);
-    } else {
-        exe.addLibraryPath(b.path("lib/"));
-        exe.linkSystemLibrary("example_static");
-        debug.addLibraryPath(b.path("lib/"));
-        debug.linkSystemLibrary("example_static");
-    }
-    //-------------------------------------------------------------------------
 
     b.installArtifact(exe);
     const exe_run = b.addRunArtifact(exe);
@@ -243,7 +184,7 @@ fn getClangPath(alloc: std.mem.Allocator, target: std.Target) ![]const u8 {
 }
 
 const runtime_check_flags: []const []const u8 = &.{
-    "-fsanitize=array-bounds,null,alignment,unreachable,address,leak", // asan and leak are linux/macos only in 0.14.1
+    "-fsanitize=array-bounds,null,alignment,unreachable", //,address,leak", // asan and leak are linux/macos only in 0.14.1
     "-fstack-protector-strong",
     "-fno-omit-frame-pointer",
 };
@@ -283,11 +224,12 @@ fn getBuildFlags(
         if (exe.rootModuleTarget().os.tag == .windows)
             return cpp_flags;
 
-        exe.addLibraryPath(.{ .cwd_relative = try getClangPath(alloc, exe.rootModuleTarget()) });
-        const asan_lib = if (exe.rootModuleTarget().os.tag == .windows) "clang_rt.asan_dynamic-x86_64" // Won't be triggered in current version
-            else "clang_rt.asan-x86_64";
+        _ = alloc;
+        //        exe.addLibraryPath(.{ .cwd_relative = try getClangPath(alloc, exe.rootModuleTarget()) });
+        //        const asan_lib = if (exe.rootModuleTarget().os.tag == .windows) "clang_rt.asan_dynamic-x86_64" // Won't be triggered in current version
+        //            else "clang_rt.asan-x86_64";
 
-        exe.linkSystemLibrary(asan_lib);
+        //        exe.linkSystemLibrary(asan_lib);
     } else {
         cpp_flags = additional_flags;
     }
