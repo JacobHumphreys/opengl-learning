@@ -24,19 +24,48 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libcpp = true, // May need to change this to linkLibC() for your project
     });
+    exe_mod.addIncludePath(b.path("include/"));
 
-    const exe = b.addExecutable(.{
-        .name = "gl-app",
-        .root_module = exe_mod,
-    });
+    exe_mod.linkSystemLibrary(
+        "glfw",
+        .{ .needed = true, .preferred_link_mode = .static },
+    );
+    exe_mod.linkSystemLibrary(
+        "GLEW",
+        .{ .needed = true, .preferred_link_mode = .static },
+    );
+    exe_mod.linkSystemLibrary(
+        "opengl",
+        .{ .needed = true, .preferred_link_mode = .static },
+    );
 
     const debug_mod = b.addModule("debug", .{
         .target = target,
         .optimize = optimize,
         .link_libcpp = true, // May need to change this to linkLibC() for your project
     });
+    debug_mod.addIncludePath(b.path("include/"));
+
+    debug_mod.linkSystemLibrary(
+        "glfw",
+        .{ .needed = true, .preferred_link_mode = .static },
+    );
+    debug_mod.linkSystemLibrary(
+        "GLEW",
+        .{ .needed = true, .preferred_link_mode = .static },
+    );
+    debug_mod.linkSystemLibrary(
+        "opengl",
+        .{ .needed = true, .preferred_link_mode = .static },
+    );
 
     // Does not link asan or use build flags other than "std="
+
+    const exe = b.addExecutable(.{
+        .name = "gl-app",
+        .root_module = exe_mod,
+    });
+
     const debug = b.addExecutable(.{
         .name = "debug",
         .root_module = debug_mod,
@@ -60,30 +89,11 @@ pub fn build(b: *std.Build) void {
     ) catch |err|
         @panic(@errorName(err));
 
-    // Setup exe executable
-    {
-        exe.addCSourceFiles(exe_files);
-        exe.root_module.linkSystemLibrary(
-            "glfw",
-            .{ .needed = true, .preferred_link_mode = .static },
-        );
-        exe.root_module.linkSystemLibrary(
-            "GLEW",
-            .{ .needed = true, .preferred_link_mode = .static },
-        );
-        exe.root_module.linkSystemLibrary(
-            "opengl",
-            .{ .needed = true, .preferred_link_mode = .static },
-        );
-    }
+    var debug_files = exe_files;
+    debug_files.flags = additional_flags;
 
-    // Setup debug executable
-    {
-        var debug_files = exe_files;
-        debug_files.flags = additional_flags;
-        debug.addCSourceFiles(debug_files);
-        debug.addIncludePath(b.path("include"));
-    }
+    exe.root_module.addCSourceFiles(exe_files);
+    debug.root_module.addCSourceFiles(debug_files);
 
     b.installArtifact(exe);
     const exe_run = b.addRunArtifact(exe);
@@ -234,13 +244,13 @@ fn getBuildFlags(
             return cpp_flags;
 
         _ = alloc;
-        //        exe.addLibraryPath(.{ .cwd_relative = try getClangPath(alloc, exe.rootModuleTarget()) });
+        //        exe.root_module.addLibraryPath(.{ .cwd_relative = try getClangPath(alloc, exe.rootModuleTarget()) });
         //        const asan_lib = if (exe.rootModuleTarget().os.tag == .windows) "clang_rt.asan_dynamic-x86_64" // Won't be triggered in current version
         //            else "clang_rt.asan-x86_64";
 
-        //        exe.linkSystemLibrary(asan_lib);
+        //        exe.root_module.linkSystemLibrary(asan_lib);
     } else {
-        cpp_flags = additional_flags;
+        cpp_flags = additional_flags ++ warning_flags;
     }
     return cpp_flags;
 }
@@ -259,18 +269,13 @@ fn createCLib(
         flags: []const []const u8 = &.{},
     },
 ) *Build.Step.Compile {
-    var lib = b.addLibrary(.{
-        .name = lib_options.name,
-        .root_module = b.createModule(.{
-            .optimize = lib_options.optimize,
-            .target = lib_options.target,
-            .link_libc = lib_options.language == .c,
-            .link_libcpp = lib_options.language == .cpp,
-        }),
-        .linkage = lib_options.linkage,
+    const lib_module = b.createModule(.{
+        .optimize = lib_options.optimize,
+        .target = lib_options.target,
+        .link_libc = lib_options.language == .c,
+        .link_libcpp = lib_options.language == .cpp,
     });
-
-    lib.addCSourceFiles(
+    lib_module.addCSourceFiles(
         getCSrcFiles(b.allocator, .{
             .dir_path = lib_options.dir_path,
             .language = lib_options.language,
@@ -279,7 +284,11 @@ fn createCLib(
             @panic(@errorName(err)),
     );
 
-    lib.addIncludePath(b.path(lib_options.include_path));
+    lib_module.addIncludePath(b.path(lib_options.include_path));
 
-    return lib;
+    return b.addLibrary(.{
+        .name = lib_options.name,
+        .root_module = lib_module,
+        .linkage = lib_options.linkage,
+    });
 }
