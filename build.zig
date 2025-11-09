@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const exe = b.addExecutable(.{
-        .name = "zig-compiled",
+        .name = "gl-app",
         .root_module = exe_mod,
     });
 
@@ -35,6 +35,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libcpp = true, // May need to change this to linkLibC() for your project
     });
+
     // Does not link asan or use build flags other than "std="
     const debug = b.addExecutable(.{
         .name = "debug",
@@ -52,7 +53,7 @@ pub fn build(b: *std.Build) void {
     const exe_files = getCSrcFiles(
         b.allocator,
         .{
-            .dir_path = "src/",
+            .dir_path = "src",
             .flags = exe_flags,
             .language = .cpp,
         },
@@ -62,10 +63,18 @@ pub fn build(b: *std.Build) void {
     // Setup exe executable
     {
         exe.addCSourceFiles(exe_files);
-        exe.addIncludePath(b.path("include"));
-        exe.linkSystemLibrary("glfw");
-        exe.linkSystemLibrary("GLEW");
-        exe.linkSystemLibrary("opengl");
+        exe.root_module.linkSystemLibrary(
+            "glfw",
+            .{ .needed = true, .preferred_link_mode = .static },
+        );
+        exe.root_module.linkSystemLibrary(
+            "GLEW",
+            .{ .needed = true, .preferred_link_mode = .static },
+        );
+        exe.root_module.linkSystemLibrary(
+            "opengl",
+            .{ .needed = true, .preferred_link_mode = .static },
+        );
     }
 
     // Setup debug executable
