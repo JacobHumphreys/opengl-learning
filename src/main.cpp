@@ -1,4 +1,5 @@
 #include <GL/glew.h>
+#include <GL/gl.h>
 #include <GL/glext.h>
 #include <GLFW/glfw3.h>
 #include <cassert>
@@ -9,7 +10,9 @@
 #include <ostream>
 #include <print>
 #include <string>
+
 #include "shaders.hpp"
+#include "errors.hpp"
 
 using std::println;
 using std::string;
@@ -22,7 +25,7 @@ int main(void) {
     /* Create a windowed mode window and its OpenGL context */
     auto window = glfwCreateWindow(640, 480, "Hello World", nullptr, nullptr);
     if (!window) {
-        glfwTerminate();
+        CALL_GL(glfwTerminate());
         return -1;
     }
 
@@ -51,51 +54,51 @@ int main(void) {
 
     {
         uint32_t vertex_buffer;
-        glGenBuffers(1, &vertex_buffer);
-        glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+        CALL_GL(glGenBuffers(1, &vertex_buffer));
+        CALL_GL(glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer));
 
-        glBufferData(GL_ARRAY_BUFFER, sizeof(positions), positions, GL_STATIC_DRAW);
+        CALL_GL(glBufferData(GL_ARRAY_BUFFER, sizeof(positions), positions, GL_STATIC_DRAW));
 
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0);
+        CALL_GL(glEnableVertexAttribArray(0));
+        CALL_GL(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0));
     }
 
     {
         uint32_t index_buffer_object;
-        glGenBuffers(1, &index_buffer_object);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_object);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indicies), indicies, GL_STATIC_DRAW);
+        CALL_GL(glGenBuffers(1, &index_buffer_object));
+        CALL_GL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_object));
+        CALL_GL(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indicies), indicies, GL_STATIC_DRAW));
     }
 
     auto basic_shader_source = shaders::parseShader("./src/resources/shaders/basic.glsl");
 
     auto shader = shaders::createShader(basic_shader_source);
-    glUseProgram(shader);
+    CALL_GL(glUseProgram(shader));
 
     /* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window)) {
         { // fix wayland
             int fbWidth, fbHeight;
-            glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
+            CALL_GL(glfwGetFramebufferSize(window, &fbWidth, &fbHeight));
             // Set viewport to framebuffer size
-            glViewport(0, 0, fbWidth, fbHeight);
+            CALL_GL(glViewport(0, 0, fbWidth, fbHeight));
         }
 
         /* Render here */
-        glClear(GL_COLOR_BUFFER_BIT);
+        CALL_GL(glClear(GL_COLOR_BUFFER_BIT));
 
-        //        glDrawArrays(GL_TRIANGLES, 0, sizeof(positions) / 2);
-        glDrawElements(GL_TRIANGLES, sizeof(indicies) / sizeof(float), GL_UNSIGNED_INT, nullptr);
+        CALL_GL(
+            glDrawElements(GL_TRIANGLES, sizeof(indicies) / sizeof(float), GL_UNSIGNED_INT, nullptr));
 
         /* Swap front and back buffers */
-        glfwSwapBuffers(window);
+        CALL_GL(glfwSwapBuffers(window));
 
         /* Poll for and process events */
-        glfwPollEvents();
+        CALL_GL(glfwPollEvents());
     }
 
-    glDeleteProgram(shader);
+    CALL_GL(glDeleteProgram(shader));
 
-    glfwTerminate();
+    CALL_GL(glfwTerminate());
     return 0;
 }
