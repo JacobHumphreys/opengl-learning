@@ -32,53 +32,30 @@
             libxkbcommon
             libffi
           ];
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+            pkgs.glfw
+            pkgs.mesa # OpenGL headers and library
+            pkgs.libGL # OpenGL system library
+            pkgs.glew
+            pkgs.wayland
+            pkgs.wayland-scanner
+            pkgs.libxkbcommon
+            pkgs.libffi
+          ];
 
           shellHook = ''
             echo "🔧 CPP/C Template.Zig dev shell (Nixpkgs 25.05)"
+                # Include paths for the compiler
+                export CPATH="${pkgs.glew}/include:${pkgs.glfw}/include:${pkgs.libGL}/include:${pkgs.mesa}/include"
+
+                # Library paths
+                export LIBRARY_PATH="${pkgs.glew}/lib:${pkgs.glfw}/lib:${pkgs.libGL}/lib:${pkgs.mesa}/lib"
+
+                # pkg-config path
+                export PKG_CONFIG_PATH="${pkgs.glew}/lib/pkgconfig:${pkgs.glfw}/lib/pkgconfig:${pkgs.mesa}/lib/pkgconfig"
+
           '';
         };
-
-#        # Package / build command
-#        packages.default = pkgs.stdenv.mkDerivation {
-#          pname = "cpp-zig-build";
-#          version = "0.1";
-#          sandbox = false;
-#
-#          # Grab same dependencies as devShell
-#          buildInputs = with pkgs; [
-#            rocmPackages.clang
-#            lldb_20
-#            zig_0_15
-#            pkg-config
-#            gdb
-#
-#            glfw
-#            mesa
-#            libGL
-#            glew
-#
-#            wayland
-#            wayland-scanner
-#            libxkbcommon
-#            libffi
-#          ];
-#
-#          # Source directory (assumes your code is in ./src)
-#          src = ./.;
-#
-#          # Build command: just run `zig build`
-#          buildPhase = ''
-#            echo "🏗️ Building with Zig..."
-#            export ZIG_GLOBAL_CACHE_DIR=$PWD/.zig-cache
-#            zig build --system
-#          '';
-#
-#          installPhase = ''
-#            echo "📦 Installing (copying build output)..."
-#            mkdir -p $out/bin
-#            cp zig-out/bin/* $out/bin/ || true
-#          '';
-#        };
       });
 }
 

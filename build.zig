@@ -26,6 +26,10 @@ pub fn build(b: *std.Build) void {
     });
     exe_mod.addIncludePath(b.path("include/"));
 
+    addSystemLibIncludeFlags(b, exe_mod, "glfw3") catch |err| std.debug.panic("{t}", .{err});
+    addSystemLibIncludeFlags(b, exe_mod, "glew") catch |err| std.debug.panic("{t}", .{err});
+    addSystemLibIncludeFlags(b, exe_mod, "gl") catch |err| std.debug.panic("{t}", .{err});
+
     exe_mod.linkSystemLibrary(
         "glfw",
         .{ .needed = true, .preferred_link_mode = .static },
@@ -45,6 +49,10 @@ pub fn build(b: *std.Build) void {
         .link_libcpp = true, // May need to change this to linkLibC() for your project
     });
     debug_mod.addIncludePath(b.path("include/"));
+
+    addSystemLibIncludeFlags(b, debug_mod, "glfw3") catch |err| std.debug.panic("{t}", .{err});
+    addSystemLibIncludeFlags(b, debug_mod, "glew") catch |err| std.debug.panic("{t}", .{err});
+    addSystemLibIncludeFlags(b, debug_mod, "gl") catch |err| std.debug.panic("{t}", .{err});
 
     debug_mod.linkSystemLibrary(
         "glfw",
@@ -78,6 +86,7 @@ pub fn build(b: *std.Build) void {
         optimize,
     ) catch |err|
         @panic(@errorName(err));
+    defer b.allocator.free(exe_flags);
 
     const exe_files = getCSrcFiles(
         b.allocator,
@@ -291,4 +300,48 @@ fn createCLib(
         .root_module = lib_module,
         .linkage = lib_options.linkage,
     });
+}
+
+/// Because certain ides (clion) wont find system headers unless specifically pointed to.
+fn addSystemLibIncludeFlags(b: *Build, module: *Module, libName: []const u8) !void {
+    var child_arena = std.heap.ArenaAllocator.init(b.allocator);
+    defer child_arena.deinit();
+    const alloc = child_arena.allocator();
+
+    var child_proc = std.process.Child.init(&.{ "pkg-config", "--cflags-only-I", libName }, alloc);
+    child_proc.stdout_behavior = .Pipe;
+
+    try child_proc.spawn();
+    defer _ = child_proc.wait() catch {};
+
+    var proc_output_buffer = ArrayList(u8).empty;
+
+    while (true) {
+        var tmp: [1024]u8 = undefined;
+        const read_len = try child_proc.stdout.?.read(&tmp);
+        if (read_len == 0) break;
+        try proc_output_buffer.appendSlice(alloc, tmp[0..read_len]);
+    }
+
+    var path_iter = std.mem.splitScalar(u8, proc_output_buffer.items, ' ');
+
+    while (path_iter.next()) |path| {
+        const index = mem.indexOf(u8, path, "-I") orelse continue;
+        if (index != 0) continue;
+
+        const trimmed_path = Build.LazyPath{
+            .cwd_relative = try removeAllAlloc(alloc, u8, path[2..], &std.ascii.whitespace),
+        };
+        //b.path(path[2..]);
+        module.addIncludePath(trimmed_path);
+    }
+}
+
+fn removeAllAlloc(alloc: Allocator, comptime T: type, haystack: []const T, needles: []const T) ![]T {
+    var trimmed = try ArrayList(T).initCapacity(alloc, haystack.len);
+    for (haystack) |elem| {
+        if (std.mem.containsAtLeast(T, needles, 1, &.{elem})) continue;
+        trimmed.appendAssumeCapacity(elem);
+    }
+    return try trimmed.toOwnedSlice(alloc);
 }
