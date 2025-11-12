@@ -11,12 +11,14 @@ using shaders::ShaderProgramSource;
 using std::string;
 using std::vector;
 
-uint32_t shaders::compileShader(uint32_t type, const vector<string>& sources)
-{
+namespace ranges = std::ranges;
+
+uint32_t shaders::compileShader(uint32_t type, const vector<string>& sources) {
     uint32_t id = glCreateShader(type);
 
-    auto raw_sources = sources | std::ranges::views::transform([](const string& s) -> const char* { return s.c_str(); })
-        | std::ranges::to<vector<const char*>>();
+    auto raw_sources = sources
+        | ranges::views::transform([](const string& s) { return s.c_str(); })
+        | ranges::to<vector<const char*>>();
 
     CALL_GL(glShaderSource(id, raw_sources.size(), raw_sources.data(), nullptr));
     CALL_GL(glCompileShader(id));
@@ -38,14 +40,12 @@ uint32_t shaders::compileShader(uint32_t type, const vector<string>& sources)
     return id;
 }
 
-uint32_t shaders::compileShader(uint32_t type, const string& source)
-{
+uint32_t shaders::compileShader(uint32_t type, const string& source) {
     const vector<string> sources = { source };
     return compileShader(type, sources);
 }
 
-uint32_t shaders::createShader(const ShaderProgramSource source)
-{
+uint32_t shaders::createShader(const ShaderProgramSource source) {
     uint32_t program = glCreateProgram();
 
     uint32_t vs = compileShader(GL_VERTEX_SHADER, source.vertex_source);
@@ -61,8 +61,7 @@ uint32_t shaders::createShader(const ShaderProgramSource source)
     return program;
 }
 
-ShaderProgramSource shaders::parseShader(const string& file_path)
-{
+ShaderProgramSource shaders::parseShader(const string& file_path) {
     std::ifstream stream(file_path);
 
     enum class ShaderType {

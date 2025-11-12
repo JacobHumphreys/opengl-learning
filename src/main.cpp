@@ -2,15 +2,15 @@
 #include <GL/gl.h>
 #include <GL/glext.h>
 #include <GLFW/glfw3.h>
-#include <cassert>
 #include <cmath>
-#include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <ostream>
 #include <print>
 #include <string>
 
+#include "debug.hpp"
 #include "shaders.hpp"
 #include "errors.hpp"
 
@@ -22,6 +22,10 @@ int main(void) {
     if (!glfwInit())
         return -1;
 
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
     /* Create a windowed mode window and its OpenGL context */
     auto window = glfwCreateWindow(640, 480, "Hello World", nullptr, nullptr);
     if (!window) {
@@ -31,6 +35,8 @@ int main(void) {
 
     /* Make the window's context current */
     glfwMakeContextCurrent(window);
+    // Sets vsync
+    glfwSwapInterval(1);
 
     if (glewInit() != GLEW_OK) {
         println(std::cerr, "Failed to start GLEW");
@@ -40,42 +46,56 @@ int main(void) {
         println("version: {}", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
     }
 
-    const float_t positions[] = {
+    constexpr float_t positions[] = {
         -0.5f, -0.5f, // 0
         0.5f, -0.5f, // 1
         0.5f, 0.5f, // 2
         -0.5f, 0.5f, // 3
     };
 
-    const uint32_t indicies[] = {
+    constexpr uint32_t indices[] = {
         0, 1, 2, // triangle 1
         2, 3, 0, // triangle 2
     };
 
-    {
-        uint32_t vertex_buffer;
-        CALL_GL(glGenBuffers(1, &vertex_buffer));
-        CALL_GL(glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer));
+    uint32_t vertex_array_object;
+    CALL_GL(glGenVertexArrays(1, &vertex_array_object))
+    CALL_GL(glBindVertexArray(vertex_array_object))
 
-        CALL_GL(glBufferData(GL_ARRAY_BUFFER, sizeof(positions), positions, GL_STATIC_DRAW));
+    uint32_t vertex_buffer;
+    CALL_GL(glGenBuffers(1, &vertex_buffer));
+    CALL_GL(glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer));
+    CALL_GL(glBufferData(GL_ARRAY_BUFFER, sizeof(positions), positions, GL_STATIC_DRAW));
 
-        CALL_GL(glEnableVertexAttribArray(0));
-        CALL_GL(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0));
-    }
+    CALL_GL(glEnableVertexAttribArray(0));
 
-    {
-        uint32_t index_buffer_object;
-        CALL_GL(glGenBuffers(1, &index_buffer_object));
-        CALL_GL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_object));
-        CALL_GL(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indicies), indicies, GL_STATIC_DRAW));
-    }
+    // Sets 0th index of vertex_array_object to bind to the currently bound buffer (vertex_buffer)
+    CALL_GL(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0));
+
+    uint32_t index_buffer_object;
+    CALL_GL(glGenBuffers(1, &index_buffer_object));
+    CALL_GL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_object));
+    CALL_GL(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW));
 
     auto basic_shader_source = shaders::parseShader("./src/resources/shaders/basic.glsl");
 
     auto shader = shaders::createShader(basic_shader_source);
     CALL_GL(glUseProgram(shader));
 
-    /* Loop until the user closes the window */
+    // Set color uniform
+    int32_t location = glGetUniformLocation(shader, "u_color");
+    ASSERT_BP(location != -1);
+
+    CALL_GL(glUniform4f(location, 0.8f, 0.3f, 0.4f, 1.0f));
+
+    CALL_GL(glUseProgram(0));
+    CALL_GL(glBindVertexArray(0));
+    CALL_GL(glBindBuffer(GL_ARRAY_BUFFER, 0));
+    CALL_GL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0));
+
+    float r = 0;
+    float increment = 0.05f;
+    // Loop until the user closes the window
     while (!glfwWindowShouldClose(window)) {
         { // fix wayland
             int fbWidth, fbHeight;
@@ -87,8 +107,21 @@ int main(void) {
         /* Render here */
         CALL_GL(glClear(GL_COLOR_BUFFER_BIT));
 
+        if (r > 1.0f)
+            increment = -0.05f;
+        else if (r < 0)
+            increment = 0.05f;
+
+        r += increment;
+
+        /* Draw Calls */
+        CALL_GL(glUseProgram(shader));
+        CALL_GL(glUniform4f(location, r, 0.3f, 0.4f, 1.0f));
+        CALL_GL(glBindVertexArray(vertex_array_object));
+        CALL_GL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_object));
+
         CALL_GL(
-            glDrawElements(GL_TRIANGLES, sizeof(indicies) / sizeof(float), GL_UNSIGNED_INT, nullptr));
+            glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(float), GL_UNSIGNED_INT, nullptr));
 
         /* Swap front and back buffers */
         CALL_GL(glfwSwapBuffers(window));
