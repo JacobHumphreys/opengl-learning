@@ -29,7 +29,7 @@ int main(void) {
     /* Create a windowed mode window and its OpenGL context */
     auto window = glfwCreateWindow(640, 480, "Hello World", nullptr, nullptr);
     if (!window) {
-        CALL_GL(glfwTerminate());
+        glfwTerminate();
         return -1;
     }
 
@@ -65,16 +65,16 @@ int main(void) {
     uint32_t vertex_buffer;
     CALL_GL(glGenBuffers(1, &vertex_buffer));
     CALL_GL(glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer));
-    CALL_GL(glBufferData(GL_ARRAY_BUFFER, sizeof(positions), positions, GL_STATIC_DRAW));
+    CALL_GL(glBufferData(GL_ARRAY_BUFFER, sizeof(positions) , positions, GL_STATIC_DRAW));
 
     CALL_GL(glEnableVertexAttribArray(0));
 
     // Sets 0th index of vertex_array_object to bind to the currently bound buffer (vertex_buffer)
-    CALL_GL(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0));
+    CALL_GL(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, nullptr));
 
-    uint32_t index_buffer_object;
-    CALL_GL(glGenBuffers(1, &index_buffer_object));
-    CALL_GL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_object));
+    uint32_t index_buffer;
+    CALL_GL(glGenBuffers(1, &index_buffer));
+    CALL_GL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer));
     CALL_GL(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW));
 
     auto basic_shader_source = shaders::parseShader("./src/resources/shaders/basic.glsl");
@@ -83,10 +83,10 @@ int main(void) {
     CALL_GL(glUseProgram(shader));
 
     // Set color uniform
-    int32_t location = glGetUniformLocation(shader, "u_color");
-    ASSERT_BP(location != -1);
+    int32_t color_uniform = glGetUniformLocation(shader, "u_color");
+    ASSERT_BP(color_uniform != -1);
 
-    CALL_GL(glUniform4f(location, 0.8f, 0.3f, 0.4f, 1.0f));
+    CALL_GL(glUniform4f(color_uniform, 0.8f, 0.3f, 0.4f, 1.0f));
 
     CALL_GL(glUseProgram(0));
     CALL_GL(glBindVertexArray(0));
@@ -116,9 +116,9 @@ int main(void) {
 
         /* Draw Calls */
         CALL_GL(glUseProgram(shader));
-        CALL_GL(glUniform4f(location, r, 0.3f, 0.4f, 1.0f));
+        CALL_GL(glUniform4f(color_uniform, r, 0.3f, 0.4f, 1.0f));
         CALL_GL(glBindVertexArray(vertex_array_object));
-        CALL_GL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_object));
+        CALL_GL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer));
 
         CALL_GL(
             glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(float), GL_UNSIGNED_INT, nullptr));
@@ -132,6 +132,6 @@ int main(void) {
 
     CALL_GL(glDeleteProgram(shader));
 
-    CALL_GL(glfwTerminate());
+    glfwTerminate();
     return 0;
 }
