@@ -91,7 +91,7 @@ pub fn build(b: *std.Build) void {
     const exe_files = getCSrcFiles(
         b.allocator,
         .{
-            .dir_path = "src",
+            .dir_path = "src/cpp/",
             .flags = exe_flags,
             .language = .cpp,
         },
