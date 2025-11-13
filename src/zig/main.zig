@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const gl = @import("gl.zig").gl;
-const callGl = @import("debug.zig").callGl;
+const callGl = @import("errors.zig").callGl;
 const shaders = @import("shaders.zig");
 
 const Error = error{
