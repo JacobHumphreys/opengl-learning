@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const gl = @import("gl.zig").gl;
 
 pub inline fn callGl(function: anytype, args: anytype) void {
@@ -23,6 +24,9 @@ inline fn clearGlErrors() void {
     while (gl.glGetError() != gl.GL_NO_ERROR) {}
 }
 
-inline fn assertBp(assertion: bool) void {
-    if (!assertion) @breakpoint();
+pub fn assertBp(assertion: bool) void {
+    if (assertion) return else {
+        @branchHint(.cold);
+        if (builtin.zig_backend == .stage2_llvm) @breakpoint() else @trap();
+    }
 }

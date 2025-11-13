@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const gl = @import("gl.zig").gl;
+const assertBp = @import("errors.zig").assertBp;
 const callGl = @import("errors.zig").callGl;
 const shaders = @import("shaders.zig");
 
@@ -12,7 +13,7 @@ const Error = error{
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
     const alloc = gpa.allocator();
-    defer std.debug.assert(gpa.deinit() == .ok);
+    defer assertBp(gpa.deinit() == .ok);
 
     if (gl.glfwInit() == gl.GLFW_FALSE)
         return Error.InitError;
@@ -97,7 +98,7 @@ pub fn main() !void {
 
     // Set color uniform
     const color_uniform: i32 = gl.glGetUniformLocation().?(shader, "u_color");
-    std.debug.assert(color_uniform != -1);
+    assertBp(color_uniform != -1);
 
     callGl(gl.glUniform4f().?, .{ color_uniform, 0.8, 0.3, 0.4, 1.0 });
 
