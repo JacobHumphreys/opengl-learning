@@ -24,48 +24,41 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libcpp = true, // May need to change this to linkLibC() for your project
     });
-    exe_mod.addIncludePath(b.path("include/"));
-
-    addSystemLibIncludeFlags(b, exe_mod, "glfw3") catch |err| std.debug.panic("{t}", .{err});
-    addSystemLibIncludeFlags(b, exe_mod, "glew") catch |err| std.debug.panic("{t}", .{err});
-    addSystemLibIncludeFlags(b, exe_mod, "gl") catch |err| std.debug.panic("{t}", .{err});
-
-    exe_mod.linkSystemLibrary(
-        "glfw",
-        .{ .needed = true, .preferred_link_mode = .static },
-    );
-    exe_mod.linkSystemLibrary(
-        "GLEW",
-        .{ .needed = true, .preferred_link_mode = .static },
-    );
-    exe_mod.linkSystemLibrary(
-        "opengl",
-        .{ .needed = true, .preferred_link_mode = .static },
-    );
 
     const debug_mod = b.addModule("debug", .{
         .target = target,
         .optimize = optimize,
         .link_libcpp = true, // May need to change this to linkLibC() for your project
     });
-    debug_mod.addIncludePath(b.path("include/"));
 
-    addSystemLibIncludeFlags(b, debug_mod, "glfw3") catch |err| std.debug.panic("{t}", .{err});
-    addSystemLibIncludeFlags(b, debug_mod, "glew") catch |err| std.debug.panic("{t}", .{err});
-    addSystemLibIncludeFlags(b, debug_mod, "gl") catch |err| std.debug.panic("{t}", .{err});
+    const zig_mod = b.addModule("zig-exe", .{
+        .target = target,
+        .optimize = optimize,
+        .root_source_file = b.path("src/zig/main.zig"),
+        .link_libc = true,
+    });
 
-    debug_mod.linkSystemLibrary(
-        "glfw",
-        .{ .needed = true, .preferred_link_mode = .static },
-    );
-    debug_mod.linkSystemLibrary(
-        "GLEW",
-        .{ .needed = true, .preferred_link_mode = .static },
-    );
-    debug_mod.linkSystemLibrary(
-        "opengl",
-        .{ .needed = true, .preferred_link_mode = .static },
-    );
+    const modules = [_]*Module{ zig_mod, exe_mod, debug_mod };
+
+    for (modules) |mod| {
+        mod.addIncludePath(b.path("include/"));
+        addSystemLibIncludeFlags(b, mod, "glfw3") catch |err| std.debug.panic("{t}", .{err});
+        addSystemLibIncludeFlags(b, mod, "glew") catch |err| std.debug.panic("{t}", .{err});
+        addSystemLibIncludeFlags(b, mod, "gl") catch |err| std.debug.panic("{t}", .{err});
+
+        mod.linkSystemLibrary(
+            "glfw",
+            .{ .needed = true, .preferred_link_mode = .static },
+        );
+        mod.linkSystemLibrary(
+            "GLEW",
+            .{ .needed = true, .preferred_link_mode = .static },
+        );
+        mod.linkSystemLibrary(
+            "opengl",
+            .{ .needed = true, .preferred_link_mode = .static },
+        );
+    }
 
     // Does not link asan or use build flags other than "std="
 
@@ -77,6 +70,12 @@ pub fn build(b: *std.Build) void {
     const debug = b.addExecutable(.{
         .name = "debug",
         .root_module = debug_mod,
+        .use_llvm = true,
+    });
+
+    const zig_exe = b.addExecutable(.{
+        .name = "gl-app-zig",
+        .root_module = zig_mod,
         .use_llvm = true,
     });
 
@@ -105,20 +104,25 @@ pub fn build(b: *std.Build) void {
     debug.root_module.addCSourceFiles(debug_files);
 
     b.installArtifact(exe);
-    const exe_run = b.addRunArtifact(exe);
-    const debug_run = b.addRunArtifact(debug);
 
+    const exe_run = b.addRunArtifact(exe);
     exe_run.step.dependOn(b.getInstallStep());
+
+    const zig_exe_run = b.addRunArtifact(zig_exe);
+    zig_exe_run.step.dependOn(&b.addInstallArtifact(zig_exe, .{}).step);
 
     if (b.args) |args| {
         exe_run.addArgs(args);
-        debug_run.addArgs(args);
+        zig_exe_run.addArgs(args);
     }
 
     const run_step = b.step("run", "runs the application");
     run_step.dependOn(&exe_run.step);
 
     const debug_step = b.step("debug", "runs the applicaiton without any warning or san flags");
+
+    const zig_run_step = b.step("zrun", "runs the zig application");
+    zig_run_step.dependOn(&zig_exe_run.step);
 
     // Causes debug to only be compiled when using debug step.
     debug_step.dependOn(&b.addInstallArtifact(debug, .{}).step);
