@@ -93,8 +93,9 @@ pub fn main() !void {
     defer basic_shader_source.deinit(alloc);
 
     const shader = try shaders.createShader(alloc, basic_shader_source);
-    callGl(gl.glUseProgram().?, .{shader});
     defer callGl(gl.glDeleteProgram().?, .{shader});
+
+    callGl(gl.glUseProgram().?, .{shader});
 
     // Set color uniform
     const color_uniform: i32 = gl.glGetUniformLocation().?(shader, "u_color");
