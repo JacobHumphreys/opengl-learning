@@ -97,10 +97,10 @@ pub fn build(b: *std.Build) void {
     ) catch |err|
         @panic(@errorName(err));
 
+    exe.root_module.addCSourceFiles(exe_files);
+
     var debug_files = exe_files;
     debug_files.flags = additional_flags;
-
-    exe.root_module.addCSourceFiles(exe_files);
     debug.root_module.addCSourceFiles(debug_files);
 
     b.installArtifact(exe);
@@ -120,12 +120,11 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&exe_run.step);
 
     const debug_step = b.step("debug", "runs the applicaiton without any warning or san flags");
+    // Causes debug to only be compiled when using debug step.
+    debug_step.dependOn(&b.addInstallArtifact(debug, .{}).step);
 
     const zig_run_step = b.step("zrun", "runs the zig application");
     zig_run_step.dependOn(&zig_exe_run.step);
-
-    // Causes debug to only be compiled when using debug step.
-    debug_step.dependOn(&b.addInstallArtifact(debug, .{}).step);
 
     var targets = ArrayList(*std.Build.Step.Compile).empty;
     defer targets.deinit(b.allocator);

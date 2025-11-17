@@ -2,9 +2,11 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const gl = @import("gl.zig").gl;
-const assertBp = @import("errors.zig").assertBp;
+const glfw = @import("gl.zig").glfw;
+const assertBp = @import("errors.zig").assert;
 const callGl = @import("errors.zig").callGl;
 const shaders = @import("shaders.zig");
+const renderer = @import("renderer.zig");
 
 const Error = error{
     InitError,
@@ -13,24 +15,24 @@ const Error = error{
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
     const alloc = gpa.allocator();
-    defer assertBp(gpa.deinit() == .ok);
+    defer assertBp(gpa.deinit() == .ok) catch @breakpoint();
 
-    if (gl.glfwInit() == gl.GLFW_FALSE)
+    if (glfw.glfwInit() == glfw.GLFW_FALSE)
         return Error.InitError;
 
-    defer callGl(gl.glfwTerminate, .{});
+    defer glfw.glfwTerminate();
 
-    gl.glfwWindowHint(gl.GLFW_CONTEXT_VERSION_MAJOR, 4);
-    gl.glfwWindowHint(gl.GLFW_CONTEXT_VERSION_MINOR, 6);
-    gl.glfwWindowHint(gl.GLFW_OPENGL_PROFILE, gl.GLFW_OPENGL_CORE_PROFILE);
+    glfw.glfwWindowHint(glfw.GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfw.glfwWindowHint(glfw.GLFW_CONTEXT_VERSION_MINOR, 6);
+    glfw.glfwWindowHint(glfw.GLFW_OPENGL_PROFILE, glfw.GLFW_OPENGL_CORE_PROFILE);
 
-    const window = gl.glfwCreateWindow(640, 480, "glfw window", null, null) orelse {
+    const window = glfw.glfwCreateWindow(640, 480, "glfw window", null, null) orelse {
         return Error.InitError;
     };
 
-    gl.glfwMakeContextCurrent(window);
+    glfw.glfwMakeContextCurrent(window);
 
-    gl.glfwSwapInterval(1);
+    glfw.glfwSwapInterval(1);
 
     if (gl.glewInit() != gl.GLEW_OK) {
         std.log.err("Failed to start GLFW", .{});
@@ -52,39 +54,24 @@ pub fn main() !void {
     };
 
     var vertex_array_object: u32 = undefined;
-    callGl(gl.glGenVertexArrays().?, .{ 1, &vertex_array_object });
-    callGl(gl.glBindVertexArray().?, .{vertex_array_object});
+    try callGl(gl.glGenVertexArrays().?, .{ 1, &vertex_array_object });
+    try callGl(gl.glBindVertexArray().?, .{vertex_array_object});
 
-    var vertex_buffer: u32 = undefined;
-    callGl(gl.glGenBuffers().?, .{ 1, &vertex_buffer });
-    callGl(gl.glBindBuffer().?, .{ gl.GL_ARRAY_BUFFER, vertex_buffer });
-    callGl(gl.glBufferData().?, .{
-        gl.GL_ARRAY_BUFFER,
-        @sizeOf(@TypeOf(positions)),
-        &positions,
-        gl.GL_STATIC_DRAW,
-    });
+    const vertex_buffer = try renderer.VertexArray.init(&positions, positions.len * @sizeOf(f32));
+    defer vertex_buffer.deinit();
+    vertex_buffer.bind();
 
-    callGl(gl.glEnableVertexAttribArray().?, .{0});
+    try callGl(gl.glEnableVertexAttribArray().?, .{0});
 
     // Sets 0th index of vertex_array_object to bind to the currently bound buffer ().?(vertex_buffer)
-    callGl(
+    try callGl(
         gl.glVertexAttribPointer().?,
         .{ 0, 2, gl.GL_FLOAT, gl.GL_FALSE, @sizeOf(f32) * 2, null },
     );
 
-    var index_buffer: u32 = undefined;
-    callGl(gl.glGenBuffers().?, .{ 1, &index_buffer });
-    callGl(gl.glBindBuffer().?, .{ gl.GL_ELEMENT_ARRAY_BUFFER, index_buffer });
-    callGl(
-        gl.glBufferData().?,
-        .{
-            gl.GL_ELEMENT_ARRAY_BUFFER,
-            @sizeOf(@TypeOf(indices)),
-            &indices,
-            gl.GL_STATIC_DRAW,
-        },
-    );
+    const index_buffer = try renderer.IndexArray.init(&indices, indices.len);
+    defer index_buffer.deinit();
+    index_buffer.bind();
 
     const basic_shader_source = try shaders.parseShader(
         alloc,
@@ -93,31 +80,29 @@ pub fn main() !void {
     defer basic_shader_source.deinit(alloc);
 
     const shader = try shaders.createShader(alloc, basic_shader_source);
-    defer callGl(gl.glDeleteProgram().?, .{shader});
+    defer callGl(gl.glDeleteProgram().?, .{shader}) catch @breakpoint();
 
-    callGl(gl.glUseProgram().?, .{shader});
+    try callGl(gl.glUseProgram().?, .{shader});
 
     // Set color uniform
     const color_uniform: i32 = gl.glGetUniformLocation().?(shader, "u_color");
-    assertBp(color_uniform != -1);
+    assertBp(color_uniform != -1) catch @breakpoint();
 
-    callGl(gl.glUniform4f().?, .{ color_uniform, 0.8, 0.3, 0.4, 1.0 });
-
-    callGl(gl.glUseProgram().?, .{0});
-    callGl(gl.glBindVertexArray().?, .{0});
-    callGl(gl.glBindBuffer().?, .{ gl.GL_ARRAY_BUFFER, 0 });
-    callGl(gl.glBindBuffer().?, .{ gl.GL_ELEMENT_ARRAY_BUFFER, 0 });
+    try callGl(gl.glUseProgram().?, .{0});
+    try callGl(gl.glBindVertexArray().?, .{0});
+    vertex_buffer.unbind();
+    index_buffer.unbind();
 
     var r: f32 = 0;
     var increment: f32 = 0.05;
-    while (gl.glfwWindowShouldClose(window) == gl.GLFW_FALSE) {
+    while (glfw.glfwWindowShouldClose(window) == glfw.GLFW_FALSE) {
         {
             var fb_width: i32 = 0;
             var fb_height: i32 = 0;
-            callGl(gl.glfwGetFramebufferSize, .{ window, &fb_width, &fb_height });
-            callGl(gl.glViewport, .{ 0, 0, fb_width, fb_height });
+            glfw.glfwGetFramebufferSize(window, &fb_width, &fb_height);
+            try callGl(gl.glViewport, .{ 0, 0, fb_width, fb_height });
         }
-        callGl(gl.glClear, .{gl.GL_COLOR_BUFFER_BIT});
+        try callGl(gl.glClear, .{gl.GL_COLOR_BUFFER_BIT});
 
         increment = if (r > 1.0)
             -0.05
@@ -128,19 +113,19 @@ pub fn main() !void {
 
         r += increment;
 
-        callGl(gl.glUseProgram().?, .{shader});
-        callGl(gl.glUniform4f().?, .{ color_uniform, r, 0.3, 0.4, 1.0 });
+        try callGl(gl.glUseProgram().?, .{shader});
+        try callGl(gl.glUniform4f().?, .{ color_uniform, r, 0.3, 0.4, 1.0 });
 
-        callGl(gl.glBindVertexArray().?, .{vertex_array_object});
-        callGl(gl.glBindBuffer().?, .{ gl.GL_ELEMENT_ARRAY_BUFFER, index_buffer });
+        try callGl(gl.glBindVertexArray().?, .{vertex_array_object});
+        index_buffer.bind();
 
-        callGl(
+        try callGl(
             gl.glDrawElements,
             .{ gl.GL_TRIANGLES, indices.len, gl.GL_UNSIGNED_INT, null },
         );
 
-        callGl(gl.glfwSwapBuffers, .{window});
+        try callGl(glfw.glfwSwapBuffers, .{window});
 
-        callGl(gl.glfwPollEvents, .{});
+        try callGl(glfw.glfwPollEvents, .{});
     }
 }
